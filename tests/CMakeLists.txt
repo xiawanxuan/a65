@@ -7,6 +7,7 @@ add_executable(slope_tests
     test_solver.cpp
     test_stability.cpp
     test_vtk_export.cpp
+    test_seismic.cpp
 )
 
 target_link_libraries(slope_tests PRIVATE

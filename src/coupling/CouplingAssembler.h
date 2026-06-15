@@ -11,6 +11,7 @@ struct ElementMatrices {
     Eigen::Matrix<double, 3, 6> Kpu;
     Eigen::Matrix<double, 3, 3> Kpp;
     Eigen::Matrix<double, 3, 3> Mpp;
+    Eigen::Matrix<double, 6, 6> Muu;
     Eigen::VectorXd Fu;
     Eigen::VectorXd Fp;
 };
@@ -46,6 +47,48 @@ public:
         double rainfallRate,
         double dt,
         double currentTime);
+
+    void applySeismicInertia(
+        const Eigen::VectorXd& fx,
+        const Eigen::VectorXd& fy,
+        double beta = 1.0,
+        double gamma = 0.5);
+
+    void assembleMassMatrix(
+        const Eigen::Matrix<double, 6, 6>& Muu,
+        const int nodeIds[3]);
+
+    void applyNewmarkAcceleration(
+        const Eigen::VectorXd& acceleration,
+        double beta, double gamma, double dt);
+
+    void setPreviousState(
+        const Eigen::VectorXd& prevU,
+        const Eigen::VectorXd& prevV,
+        const Eigen::VectorXd& prevA);
+
+    void getNewmarkPredictor(
+        Eigen::VectorXd& predictor,
+        double beta, double gamma, double dt);
+
+    void updateNewmarkState(
+        const Eigen::VectorXd& deltaU,
+        Eigen::VectorXd& newU,
+        Eigen::VectorXd& newV,
+        Eigen::VectorXd& newA,
+        double beta, double gamma, double dt);
+
+    static ElementMatrices computeDynamicElementMatrices(
+        const Eigen::Vector2d& p0,
+        const Eigen::Vector2d& p1,
+        const Eigen::Vector2d& p2,
+        double E, double nu_poisson,
+        double kx, double ky,
+        double porosity, double unitWeight,
+        double dt,
+        double Se, double dSdP_val,
+        double biotAlpha = 1.0,
+        double massLumping = true);
 
     void buildGlobalSystem();
 

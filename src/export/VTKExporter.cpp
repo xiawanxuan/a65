@@ -264,6 +264,144 @@ void VTKExporter::exportTimeStep(
         {stressField, fosField});
 }
 
+void VTKExporter::exportTimeStepSeismic(
+    const std::string& outputDir,
+    int timeStep,
+    double currentTime,
+    const std::vector<double>& nodeX,
+    const std::vector<double>& nodeY,
+    const std::vector<int>& elementNodeIds,
+    int nodesPerElement,
+    const Eigen::VectorXd& displacementX,
+    const Eigen::VectorXd& displacementY,
+    const Eigen::VectorXd& porePressure,
+    const Eigen::VectorXd& saturation,
+    const Eigen::VectorXd& effectiveStressXX,
+    const Eigen::VectorXd& effectiveStressYY,
+    const Eigen::VectorXd& effectiveStressXY,
+    const Eigen::VectorXd& safetyFactor,
+    const Eigen::VectorXd& accelerationX,
+    const Eigen::VectorXd& accelerationY,
+    const Eigen::VectorXd& velocityX,
+    const Eigen::VectorXd& velocityY,
+    const Eigen::VectorXd& inertiaForceX,
+    const Eigen::VectorXd& inertiaForceY,
+    const Eigen::VectorXd& nodeMass,
+    const Eigen::VectorXd& inputAccelerationX,
+    const Eigen::VectorXd& inputAccelerationY,
+    bool enableSeismic)
+{
+    fs::create_directories(outputDir);
+
+    std::ostringstream fname;
+    fname << outputDir << "/slope_step_"
+          << std::setfill('0') << std::setw(6) << timeStep << ".vtu";
+
+    int numNodes = static_cast<int>(nodeX.size());
+    int numElements = static_cast<int>(elementNodeIds.size()) / nodesPerElement;
+
+    VTKFieldData dispField;
+    dispField.name = "Displacement";
+    dispField.numComponents = 3;
+    dispField.data.resize(numNodes * 3, 0.0);
+    for (int i = 0; i < numNodes; ++i) {
+        dispField.data[i * 3] = displacementX(i);
+        dispField.data[i * 3 + 1] = displacementY(i);
+    }
+
+    VTKFieldData pressureField;
+    pressureField.name = "PorePressure";
+    pressureField.numComponents = 1;
+    pressureField.data.resize(numNodes);
+    for (int i = 0; i < numNodes; ++i) {
+        pressureField.data[i] = porePressure(i);
+    }
+
+    VTKFieldData satField;
+    satField.name = "Saturation";
+    satField.numComponents = 1;
+    satField.data.resize(numNodes);
+    for (int i = 0; i < numNodes; ++i) {
+        satField.data[i] = saturation(i);
+    }
+
+    std::vector<VTKFieldData> pointDataList = {dispField, pressureField, satField};
+
+    if (enableSeismic) {
+        VTKFieldData accField;
+        accField.name = "Acceleration";
+        accField.numComponents = 3;
+        accField.data.resize(numNodes * 3, 0.0);
+        for (int i = 0; i < numNodes; ++i) {
+            accField.data[i * 3] = accelerationX(i);
+            accField.data[i * 3 + 1] = accelerationY(i);
+        }
+        pointDataList.push_back(accField);
+
+        VTKFieldData velField;
+        velField.name = "Velocity";
+        velField.numComponents = 3;
+        velField.data.resize(numNodes * 3, 0.0);
+        for (int i = 0; i < numNodes; ++i) {
+            velField.data[i * 3] = velocityX(i);
+            velField.data[i * 3 + 1] = velocityY(i);
+        }
+        pointDataList.push_back(velField);
+
+        VTKFieldData forceField;
+        forceField.name = "InertiaForce";
+        forceField.numComponents = 3;
+        forceField.data.resize(numNodes * 3, 0.0);
+        for (int i = 0; i < numNodes; ++i) {
+            forceField.data[i * 3] = inertiaForceX(i);
+            forceField.data[i * 3 + 1] = inertiaForceY(i);
+        }
+        pointDataList.push_back(forceField);
+
+        VTKFieldData massField;
+        massField.name = "NodeMass";
+        massField.numComponents = 1;
+        massField.data.resize(numNodes);
+        for (int i = 0; i < numNodes; ++i) {
+            massField.data[i] = nodeMass(i);
+        }
+        pointDataList.push_back(massField);
+
+        VTKFieldData inputAccField;
+        inputAccField.name = "InputAcceleration";
+        inputAccField.numComponents = 3;
+        inputAccField.data.resize(numNodes * 3, 0.0);
+        for (int i = 0; i < numNodes; ++i) {
+            inputAccField.data[i * 3] = inputAccelerationX(i);
+            inputAccField.data[i * 3 + 1] = inputAccelerationY(i);
+        }
+        pointDataList.push_back(inputAccField);
+    }
+
+    VTKFieldData stressField;
+    stressField.name = "EffectiveStress";
+    stressField.numComponents = 3;
+    stressField.data.resize(numElements * 3, 0.0);
+    for (int i = 0; i < numElements; ++i) {
+        stressField.data[i * 3] = effectiveStressXX(i);
+        stressField.data[i * 3 + 1] = effectiveStressYY(i);
+        stressField.data[i * 3 + 2] = effectiveStressXY(i);
+    }
+
+    VTKFieldData fosField;
+    fosField.name = "SafetyFactor";
+    fosField.numComponents = 1;
+    fosField.data.resize(numElements);
+    for (int i = 0; i < numElements; ++i) {
+        fosField.data[i] = safetyFactor(i);
+    }
+
+    exportUnstructuredGrid(
+        fname.str(), nodeX, nodeY, elementNodeIds, nodesPerElement,
+        pointDataList,
+        {stressField, fosField});
+}
+
 void VTKExporter::writePVDFile(
     const std::string& filename,
     const std::vector<std::pair<double, std::string>>& timeStepFiles)

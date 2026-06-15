@@ -63,8 +63,49 @@ SimConfig CLIParser::parse(int argc, char* argv[])
         ("export-intermediate", po::bool_switch(&config.exportIntermediate),
          "Export intermediate iteration results");
 
+    po::options_description seismic("Seismic Loading Options");
+    seismic.add_options()
+        ("enable-seismic", po::bool_switch(&config.enableSeismic),
+         "Enable seismic loading coupling")
+        ("seismic-file", po::value<std::string>(&config.seismicFile),
+         "Seismic acceleration time history file")
+        ("seismic-start", po::value<double>(&config.seismicStartTime)->default_value(0.0),
+         "Seismic loading start time in seconds")
+        ("seismic-duration", po::value<double>(&config.seismicDuration)->default_value(30.0),
+         "Seismic loading duration for synthetic motion in seconds")
+        ("seismic-amplitude", po::value<double>(&config.seismicAmplitude)->default_value(1.0),
+         "Seismic acceleration amplitude scaling factor (g)")
+        ("seismic-direction", po::value<double>(&config.seismicDirection)->default_value(0.0),
+         "Seismic input direction in degrees (0=horizontal only, 90=vertical only)")
+        ("seismic-mode", po::value<int>(&config.seismicMode)->default_value(0),
+         "Seismic motion generation: 0=harmonic, 1=sine-sweep, 2=artificial motion, 3=external file")
+        ("seismic-freq-start", po::value<double>(&config.seismicFreqStart)->default_value(1.0),
+         "Sine sweep start frequency in Hz")
+        ("seismic-freq-end", po::value<double>(&config.seismicFreqEnd)->default_value(20.0),
+         "Sine sweep end frequency in Hz")
+        ("seismic-magnitude", po::value<double>(&config.seismicMagnitude)->default_value(6.5),
+         "Earthquake magnitude for artificial motion")
+        ("seismic-distance", po::value<double>(&config.seismicDistance)->default_value(20.0),
+         "Epicentral distance for artificial motion in km")
+        ("seismic-harmonic-freq", po::value<double>(&config.seismicHarmonicFreq)->default_value(2.5),
+         "Harmonic excitation frequency in Hz")
+        ("seismic-harmonic-cycles", po::value<int>(&config.seismicHarmonicCycles)->default_value(10),
+         "Number of harmonic cycles (-1 for full duration)")
+        ("seismic-apply-x", po::bool_switch(&config.seismicApplyX)->default_value(true),
+         "Apply seismic excitation in X direction")
+        ("seismic-apply-y", po::bool_switch(&config.seismicApplyY)->default_value(false),
+         "Apply seismic excitation in Y direction")
+        ("newmark-beta", po::value<double>(&config.newmarkBeta)->default_value(0.25),
+         "Newmark-beta integration parameter")
+        ("newmark-gamma", po::value<double>(&config.newmarkGamma)->default_value(0.5),
+         "Newmark-gamma integration parameter")
+        ("rayleigh-alpha", po::value<double>(&config.rayleighAlpha)->default_value(0.05),
+         "Rayleigh damping mass coefficient")
+        ("rayleigh-beta", po::value<double>(&config.rayleighBeta)->default_value(0.02),
+         "Rayleigh damping stiffness coefficient");
+
     po::options_description all;
-    all.add(general).add(time).add(solver).add(meshgen).add(exportOpt);
+    all.add(general).add(time).add(solver).add(meshgen).add(exportOpt).add(seismic);
 
     po::variables_map vm;
     try {
@@ -116,6 +157,20 @@ bool CLIParser::validate(const SimConfig& config)
     if (config.newtonTolerance <= 0.0) {
         std::cerr << "Error: Tolerance must be positive.\n";
         return false;
+    }
+    if (config.enableSeismic) {
+        if (config.seismicMode == 3 && config.seismicFile.empty()) {
+            std::cerr << "Error: Seismic mode set to external file but --seismic-file not provided.\n";
+            return false;
+        }
+        if (config.seismicAmplitude < 0.0) {
+            std::cerr << "Error: Seismic amplitude factor must be non-negative.\n";
+            return false;
+        }
+        if (config.newmarkBeta <= 0.0 || config.newmarkGamma <= 0.0) {
+            std::cerr << "Error: Newmark integration parameters must be positive.\n";
+            return false;
+        }
     }
     return true;
 }

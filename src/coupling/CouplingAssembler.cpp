@@ -224,3 +224,150 @@ void CouplingAssembler::updateSolution(const Eigen::VectorXd& deltaU)
 {
     solution_ += deltaU;
 }
+
+void CouplingAssembler::applySeismicInertia(
+    const Eigen::VectorXd& fx,
+    const Eigen::VectorXd& fy,
+    double beta, double gamma)
+{
+    for (int i = 0; i < numNodes_; ++i) {
+        if (i < fx.size()) {
+            int xdof = displacementDofIndex(i, 0);
+            rhs_(xdof) += fx(i);
+        }
+        if (i < fy.size()) {
+            int ydof = displacementDofIndex(i, 1);
+            rhs_(ydof) += fy(i);
+        }
+    }
+}
+
+void CouplingAssembler::assembleMassMatrix(
+    const Eigen::Matrix<double, 6, 6>& Muu,
+    const int nodeIds[3])
+{
+    std::vector<int> dofIndices(6);
+    for (int i = 0; i < 3; ++i) {
+        dofIndices[2 * i] = displacementDofIndex(nodeIds[i], 0);
+        dofIndices[2 * i + 1] = displacementDofIndex(nodeIds[i], 1);
+    }
+
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            if (std::abs(Muu(i, j)) > 1.0e-30) {
+                triplets_.push_back(Eigen::Triplet<double>(dofIndices[i], dofIndices[j], Muu(i, j)));
+            }
+        }
+    }
+}
+
+void CouplingAssembler::applyNewmarkAcceleration(
+    const Eigen::VectorXd& acceleration,
+    double beta, double gamma, double dt)
+{
+    for (int i = 0; i < numNodes_; ++i) {
+        if (2 * i + 1 >= acceleration.size()) continue;
+        double ax = acceleration(2 * i);
+        double ay = acceleration(2 * i + 1);
+
+        double massCoeff = 1.0 / (beta * dt * dt);
+        double xdof = displacementDofIndex(i, 0);
+        double ydof = displacementDofIndex(i, 1);
+
+        triplets_.push_back(Eigen::Triplet<double>(xdof, xdof, massCoeff));
+        triplets_.push_back(Eigen::Triplet<double>(ydof, ydof, massCoeff));
+    }
+}
+
+void CouplingAssembler::setPreviousState(
+    const Eigen::VectorXd& prevU,
+    const Eigen::VectorXd& prevV,
+    const Eigen::VectorXd& prevA)
+{
+    if (prevU.size() >= 2 * numNodes_) {
+        for (int i = 0; i < 2 * numNodes_; ++i) {
+            solution_(i) = prevU(i);
+        }
+    }
+}
+
+void CouplingAssembler::getNewmarkPredictor(
+    Eigen::VectorXd& predictor,
+    double beta, double gamma, double dt)
+{
+    predictor.resize(2 * numNodes_);
+    predictor.setZero();
+
+    Eigen::VectorXd uPrev = solution_.head(2 * numNodes_);
+    predictor = uPrev;
+}
+
+void CouplingAssembler::updateNewmarkState(
+    const Eigen::VectorXd& deltaU,
+    Eigen::VectorXd& newU,
+    Eigen::VectorXd& newV,
+    Eigen::VectorXd& newA,
+    double beta, double gamma, double dt)
+{
+    int nu = 2 * numNodes_;
+    newU = solution_.head(nu) + deltaU.head(nu);
+
+    if (newV.size() != nu) newV.resize(nu);
+    if (newA.size() != nu) newA.resize(nu);
+
+    double a1 = 1.0 / (beta * dt * dt);
+    double a2 = gamma / (beta * dt);
+    double a3 = 1.0 / (beta * dt);
+    double a4 = gamma / beta - 1.0;
+
+    for (int i = 0; i < nu; ++i) {
+        newA(i) = a1 * deltaU(i) - a3 * newV(i) - a4 * newA(i);
+        newV(i) += gamma * dt * newA(i);
+    }
+
+    solution_.head(nu) = newU;
+}
+
+ElementMatrices CouplingAssembler::computeDynamicElementMatrices(
+    const Eigen::Vector2d& p0,
+    const Eigen::Vector2d& p1,
+    const Eigen::Vector2d& p2,
+    double E, double nu_poisson,
+    double kx, double ky,
+    double porosity, double unitWeight,
+    double dt,
+    double Se, double dSdP_val,
+    double biotAlpha,
+    double massLumping)
+{
+    ElementMatrices em = computeElementMatrices(
+        p0, p1, p2, E, nu_poisson, kx, ky, porosity, dt, Se, dSdP_val, biotAlpha);
+
+    double A = triangleArea(p0, p1, p2);
+    if (A < 1.0e-30) A = 1.0e-30;
+    double rho = unitWeight / 9.81;
+    double nodeMass = rho * A / 3.0;
+
+    em.Muu.setZero();
+    if (massLumping) {
+        for (int i = 0; i < 3; ++i) {
+            em.Muu(2 * i, 2 * i) = nodeMass;
+            em.Muu(2 * i + 1, 2 * i + 1) = nodeMass;
+        }
+    } else {
+        double c12 = rho * A / 12.0;
+        double c11 = rho * A / 6.0;
+        for (int i = 0; i < 3; ++i) {
+            em.Muu(2 * i, 2 * i) = c11;
+            em.Muu(2 * i + 1, 2 * i + 1) = c11;
+            for (int j = i + 1; j < 3; ++j) {
+                em.Muu(2 * i, 2 * j) = c12;
+                em.Muu(2 * j, 2 * i) = c12;
+                em.Muu(2 * i + 1, 2 * j + 1) = c12;
+                em.Muu(2 * j + 1, 2 * i + 1) = c12;
+            }
+        }
+    }
+
+    return em;
+}

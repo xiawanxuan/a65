@@ -24,6 +24,26 @@ struct SimConfig {
     int meshNY = 10;
     bool verbose = false;
     bool exportIntermediate = false;
+
+    bool enableSeismic = false;
+    std::string seismicFile;
+    double seismicStartTime = 0.0;
+    double seismicDuration = 30.0;
+    double seismicAmplitude = 1.0;
+    double seismicDirection = 0.0;
+    int seismicMode = 0;
+    double seismicFreqStart = 1.0;
+    double seismicFreqEnd = 20.0;
+    double seismicMagnitude = 6.5;
+    double seismicDistance = 20.0;
+    double seismicHarmonicFreq = 2.5;
+    int seismicHarmonicCycles = 10;
+    bool seismicApplyX = true;
+    bool seismicApplyY = false;
+    double newmarkBeta = 0.25;
+    double newmarkGamma = 0.5;
+    double rayleighAlpha = 0.05;
+    double rayleighBeta = 0.02;
 };
 
 class CLIParser {

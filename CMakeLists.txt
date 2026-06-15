@@ -20,6 +20,7 @@ add_library(slope_lib STATIC
     src/export/VTKExporter.cpp
     src/stability/SlopeStability.cpp
     src/cli/CLIParser.cpp
+    src/seismic/SeismicLoad.cpp
 )
 
 target_include_directories(slope_lib PUBLIC
@@ -30,6 +31,7 @@ target_include_directories(slope_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/export
     ${CMAKE_CURRENT_SOURCE_DIR}/src/stability
     ${CMAKE_CURRENT_SOURCE_DIR}/src/cli
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/seismic
 )
 
 target_link_libraries(slope_lib PUBLIC
