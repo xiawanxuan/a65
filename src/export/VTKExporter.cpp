@@ -4,19 +4,103 @@
 #include <iomanip>
 #include <filesystem>
 #include <cmath>
+#include <limits>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
 std::string VTKExporter::formatFloat(double val, int precision) {
+    if (std::isnan(val)) {
+        return "0.000000000000000e+00";
+    }
+    if (std::isinf(val)) {
+        if (val > 0.0) {
+            return "1.000000000000000e+100";
+        } else {
+            return "-1.000000000000000e+100";
+        }
+    }
+
+    if (val == 0.0) {
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(precision) << 0.0;
+        std::string s = oss.str();
+        std::string::size_type ePos = s.find('e');
+        if (ePos == std::string::npos) ePos = s.find('E');
+        if (ePos != std::string::npos) {
+            s.replace(ePos, 1, "e");
+        }
+        return s;
+    }
+
     std::ostringstream oss;
-    oss << std::setprecision(precision) << std::scientific << val;
-    return oss.str();
+    oss << std::scientific << std::uppercase << std::setprecision(precision) << val;
+    std::string s = oss.str();
+
+    std::string::size_type ePos = s.find('E');
+    if (ePos != std::string::npos) {
+        s.replace(ePos, 1, "e");
+
+        std::string expStr = s.substr(ePos + 1);
+        if (!expStr.empty()) {
+            char expSign = '+';
+            size_t numStart = 0;
+            if (expStr[0] == '+' || expStr[0] == '-') {
+                expSign = expStr[0];
+                numStart = 1;
+            }
+            std::string expNum = expStr.substr(numStart);
+            if (expNum.size() < 2) {
+                expNum = std::string(2 - expNum.size(), '0') + expNum;
+            }
+            s = s.substr(0, ePos + 1) + expSign + expNum;
+        }
+    }
+
+    return s;
 }
 
 std::string VTKExporter::getVTKCellType(int nodesPerElement) {
     if (nodesPerElement == 3) return "5";
     if (nodesPerElement == 4) return "9";
     return "7";
+}
+
+void VTKExporter::serializeFieldData(
+    std::ofstream& ofs,
+    const VTKFieldData& field,
+    const std::string& indent)
+{
+    int stride = field.numComponents;
+    size_t totalSize = field.data.size();
+    size_t numTuples = totalSize / stride;
+
+    const int valuesPerLine = 3;
+    int lineCount = 0;
+
+    for (size_t i = 0; i < numTuples; ++i) {
+        if (lineCount == 0) {
+            ofs << indent;
+        }
+
+        for (int c = 0; c < stride; ++c) {
+            size_t idx = i * stride + c;
+            if (idx < totalSize) {
+                double val = field.data[idx];
+                ofs << formatFloat(val) << " ";
+            }
+        }
+
+        lineCount++;
+        if (lineCount >= valuesPerLine) {
+            ofs << "\n";
+            lineCount = 0;
+        }
+    }
+
+    if (lineCount > 0) {
+        ofs << "\n";
+    }
 }
 
 void VTKExporter::exportUnstructuredGrid(
@@ -54,14 +138,7 @@ void VTKExporter::exportUnstructuredGrid(
             ofs << "        <DataArray type=\"Float64\" Name=\"" << pd.name
                 << "\" NumberOfComponents=\"" << pd.numComponents
                 << "\" format=\"ascii\">\n";
-            int stride = pd.numComponents;
-            for (size_t i = 0; i < pd.data.size(); i += stride) {
-                ofs << "          ";
-                for (int c = 0; c < stride && (i + c) < pd.data.size(); ++c) {
-                    ofs << formatFloat(pd.data[i + c]) << " ";
-                }
-                ofs << "\n";
-            }
+            serializeFieldData(ofs, pd, "          ");
             ofs << "        </DataArray>\n";
         }
         ofs << "      </PointData>\n";
@@ -73,14 +150,7 @@ void VTKExporter::exportUnstructuredGrid(
             ofs << "        <DataArray type=\"Float64\" Name=\"" << cd.name
                 << "\" NumberOfComponents=\"" << cd.numComponents
                 << "\" format=\"ascii\">\n";
-            int stride = cd.numComponents;
-            for (size_t i = 0; i < cd.data.size(); i += stride) {
-                ofs << "          ";
-                for (int c = 0; c < stride && (i + c) < cd.data.size(); ++c) {
-                    ofs << formatFloat(cd.data[i + c]) << " ";
-                }
-                ofs << "\n";
-            }
+            serializeFieldData(ofs, cd, "          ");
             ofs << "        </DataArray>\n";
         }
         ofs << "      </CellData>\n";

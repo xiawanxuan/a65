@@ -43,6 +43,10 @@ public:
         const std::vector<std::pair<double, std::string>>& timeStepFiles);
 
 private:
-    static std::string formatFloat(double val, int precision = 10);
+    static std::string formatFloat(double val, int precision = 15);
     static std::string getVTKCellType(int nodesPerElement);
+    static void serializeFieldData(
+        std::ofstream& ofs,
+        const VTKFieldData& field,
+        const std::string& indent);
 };
